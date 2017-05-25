@@ -7,6 +7,7 @@ public class RoboFabMonitor implements RoboFab {
 	private Monitor.Cond cRobots;
 	private Monitor.Cond cContenedor;
 	private boolean avanzando;
+	private boolean lleno;
 	private int[] pendientes;
 	private int pesoContenedor;
 	
@@ -15,6 +16,7 @@ public class RoboFabMonitor implements RoboFab {
 		cRobots = mutex.newCond();
 		cContenedor = mutex.newCond();
 		avanzando = false;
+		lleno = false;
 		pendientes = new int[Robots.NUM_ROBOTS];
 		pesoContenedor = 0;
 		
@@ -23,14 +25,23 @@ public class RoboFabMonitor implements RoboFab {
 	public void notificarPeso(int i, int p){
 		mutex.enter();
 			pendientes[i] = p;
+			for(int j = 0; j < Robots.NUM_ROBOTS; j++){
+    			if(pesoContenedor + pendientes[j] <= Cinta.MAX_P_CONTENEDOR){
+    				lleno = false;
+    				break;
+    			}
+    			lleno = true;
+    		}
+			if(lleno){
+				cContenedor.signal();
+			}
 		mutex.leave();
 	}
+	
+	
     public void permisoSoltar(int i){
     	mutex.enter();
     		while(pesoContenedor + pendientes[i] > Cinta.MAX_P_CONTENEDOR || avanzando){
-    			if(cRobots.waiting() == Robots.NUM_ROBOTS - 1){
-    				cContenedor.signal();
-    			}
     			cRobots.await();
     		}	
     		
@@ -43,6 +54,8 @@ public class RoboFabMonitor implements RoboFab {
     			
     	mutex.leave();
     }
+    
+    
     public void solicitarAvance(){
     	mutex.enter();
     		boolean permiso = true;
@@ -58,6 +71,8 @@ public class RoboFabMonitor implements RoboFab {
     		avanzando = true;
     	mutex.leave();
     }
+    
+    
     public void contenedorNuevo(){
     	mutex.enter();
     		pesoContenedor = 0;
