@@ -1,10 +1,10 @@
-
 import es.upm.babel.cclib.*;
 
 public class RoboFabMonitor implements RoboFab {
 	
 	private Monitor mutex;
 	private Monitor.Cond cRobots;
+
 	private Monitor.Cond cContenedor;
 	private boolean avanzando;
 	private boolean lleno;
@@ -17,12 +17,16 @@ public class RoboFabMonitor implements RoboFab {
 		cContenedor = mutex.newCond();
 		avanzando = false;
 		lleno = false;
+
 		pendientes = new int[Robots.NUM_ROBOTS];
 		pesoContenedor = 0;
 		
 	}
-	
+	//FUNCIONES
 	public void notificarPeso(int i, int p){
+
+    //PRE: p< Peso Maximo Contenedor
+		//POST: Roboot[i] carga p
 		mutex.enter();
 			pendientes[i] = p;
 			for(int j = 0; j < Robots.NUM_ROBOTS; j++){
@@ -36,10 +40,14 @@ public class RoboFabMonitor implements RoboFab {
 				cContenedor.signal();
 			}
 		mutex.leave();
+    //Esta funcion notifica al programa principal que el robot i
+		//ha recogido el peso p
 	}
 	
 	
     public void permisoSoltar(int i){
+      //PRE:PesoContenedor + Robot[i]< Peso Maximo Contenedor
+    	//POST: pesoContenedor+=pendiente[i] ^pendiente[i]=0 
     	mutex.enter();
     		while(pesoContenedor + pendientes[i] > Cinta.MAX_P_CONTENEDOR || avanzando){
     			cRobots.await();
@@ -48,6 +56,8 @@ public class RoboFabMonitor implements RoboFab {
     		pesoContenedor = pesoContenedor + pendientes[i];
     		pendientes[i] = 0;
     		    		
+
+
     		if(cRobots.waiting()>0){
     			cRobots.signal();
     		}
@@ -57,6 +67,10 @@ public class RoboFabMonitor implements RoboFab {
     
     
     public void solicitarAvance(){
+
+      //PRE: Cierto
+    	//POST: PesoContenedor =0, avanceSol =false
+    	//NO SE CAMBIA []pendientes
     	mutex.enter();
     		boolean permiso = true;
     		for(int i = 0; i < Robots.NUM_ROBOTS; i++){
@@ -74,6 +88,7 @@ public class RoboFabMonitor implements RoboFab {
     
     
     public void contenedorNuevo(){
+      	
     	mutex.enter();
     		pesoContenedor = 0;
     		avanzando = false;
@@ -81,6 +96,7 @@ public class RoboFabMonitor implements RoboFab {
     			cRobots.signal();
     		}
     	mutex.leave();   	  	
+
     }
 
 }
