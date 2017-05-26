@@ -7,6 +7,7 @@ public class RoboFabMonitor implements RoboFab {
 
 	private Monitor.Cond cContenedor;
 	private boolean avanzando;
+	private boolean lleno;
 	private int[] pendientes;
 	private int pesoContenedor;
 	
@@ -15,6 +16,7 @@ public class RoboFabMonitor implements RoboFab {
 		cRobots = mutex.newCond();
 		cContenedor = mutex.newCond();
 		avanzando = false;
+		lleno = false;
 
 		pendientes = new int[Robots.NUM_ROBOTS];
 		pesoContenedor = 0;
@@ -27,10 +29,21 @@ public class RoboFabMonitor implements RoboFab {
 		//POST: Roboot[i] carga p
 		mutex.enter();
 			pendientes[i] = p;
+			for(int j = 0; j < Robots.NUM_ROBOTS; j++){
+    			if(pesoContenedor + pendientes[j] <= Cinta.MAX_P_CONTENEDOR){
+    				lleno = false;
+    				break;
+    			}
+    			lleno = true;
+    		}
+			if(lleno){
+				cContenedor.signal();
+			}
 		mutex.leave();
     		//Esta funcion notifica al programa principal que el robot i
 		//ha recogido el peso p
 	}
+
     	public void permisoSoltar(int i){
       		//PRE:PesoContenedor + Robot[i]< Peso Maximo Contenedor
     		//POST: pesoContenedor+=pendiente[i] ^pendiente[i]=0 
@@ -75,6 +88,7 @@ public class RoboFabMonitor implements RoboFab {
     				cRobots.signal();
     			}
     		mutex.leave();   	  	
+
 
     	}
 
