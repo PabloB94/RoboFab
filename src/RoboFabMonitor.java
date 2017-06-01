@@ -3,7 +3,7 @@ import es.upm.babel.cclib.*;
 public class RoboFabMonitor implements RoboFab {
 	
 	private Monitor mutex;
-	private Monitor.Cond cRobots;
+	private Monitor.Cond[] cRobots;
 
 	private Monitor.Cond cContenedor;
 	private boolean avanzando;
@@ -17,7 +17,10 @@ public class RoboFabMonitor implements RoboFab {
 	//por defecto con 0 en todas las posiciones, lo cual es útil para nosotros.
 	public RoboFabMonitor(){
 		mutex = new Monitor();
-		cRobots = mutex.newCond();
+		cRobots = new Monitor.Cond[Robots.NUM_ROBOTS];
+		for (int i = 0; i < Robots.NUM_ROBOTS; i++){
+			cRobots[i] = mutex.newCond();
+		}
 		cContenedor = mutex.newCond();
 		avanzando = false;
 		lleno = false;
@@ -60,7 +63,7 @@ public class RoboFabMonitor implements RoboFab {
     	mutex.enter();
     		while(pesoContenedor + pendientes[i] > Cinta.MAX_P_CONTENEDOR || avanzando){
 				//Este bucle controla si el robot puede descargar de forma segura
-    			cRobots.await();
+    			cRobots[i].await();
     		}	
     		
 			//Aquí se actualiza la variable de control del peso del contenedor y se indica que el robot que ha 
@@ -72,9 +75,7 @@ public class RoboFabMonitor implements RoboFab {
     		//un array de colas en el que se despierte a un robot en concreto. Aunque no es la solución más
     		//optimizada respecto al tiempo de ejecución, sí lo es en términos de memoria.
 
-    		if(cRobots.waiting()>0){
-    			cRobots.signal();
-    		}
+    		liberar();
     			
     	mutex.leave();
     }
@@ -114,11 +115,18 @@ public class RoboFabMonitor implements RoboFab {
     			//Además, indica que el contenedor está quieto y se puede descargar con seguridad
     			avanzando = false;
     			//Tras hacer esto, se despierta a uno de los robots para que comience la descarga
-    			if(cRobots.waiting()>0){
-    				cRobots.signal();
-    			}
+    			liberar();
     	mutex.leave();   	  	
 
+    }
+    
+    public void liberar(){
+    	for (int i = 0; i < Robots.NUM_ROBOTS; i++){
+    		if (cRobots[i].waiting() > 0 && pendientes[i] + pesoContenedor <= Cinta.MAX_P_CONTENEDOR){
+    			cRobots[i].signal();
+    			i = Robots.NUM_ROBOTS;
+    		}
+    	}
     }
 
 }
