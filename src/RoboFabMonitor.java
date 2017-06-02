@@ -13,13 +13,13 @@ public class RoboFabMonitor implements RoboFab {
 	//Constructor de la clase RoboFabMonitor
 	public RoboFabMonitor(){
 		mutex = new Monitor(); //Inicializacion del monitor
-		cRobots = new Monitor.Cond[Robots.NUM_ROBOTS]; //Asignacion de tamaño del array de condiciones
+		cRobots = new Monitor.Cond[Robots.NUM_ROBOTS]; //Asignacion de tamano del array de condiciones
 		for (int i = 0; i < Robots.NUM_ROBOTS; i++){
 			cRobots[i] = mutex.newCond(); //Inicializacion del array de condiciones para los robots
 		}
-		cContenedor = mutex.newCond(); //Inicialización de la condicion para el contenedor
+		cContenedor = mutex.newCond(); //Inicializacion de la condicion para el contenedor
 		lleno = false;
-		pendientes = new int[Robots.NUM_ROBOTS]; //Inicialización del estado del recurso
+		pendientes = new int[Robots.NUM_ROBOTS]; //Inicializacion del estado del recurso
 		pesoContenedor = 0;		
 	}
 	
@@ -31,12 +31,12 @@ public class RoboFabMonitor implements RoboFab {
 				//Comprobamos si alguno de los robots puede descargar en la cinta
     			if(pesoContenedor + pendientes[j] <= Cinta.MAX_P_CONTENEDOR){
     				lleno = false; //Si algun robot puede descargar, el contenedor no esta lleno
-    				j = Robots.NUM_ROBOTS; //Actualizamos la variable del bucle para no seguir iterando
+    				break; //Salimos del bucle para no seguir iterando
     			}
     			lleno = true;//Si ningun robot puede descargar, marcamos el contenedor como lleno
     		}
 			if(lleno){
-				//Si el contenedor está lleno, se hace un signal a la cinta para que avance
+				//Si el contenedor esta lleno, se hace un signal a la cinta para que avance
 				cContenedor.signal();
 			}
 		mutex.leave(); //Salimos de la seccion critica   
@@ -46,9 +46,9 @@ public class RoboFabMonitor implements RoboFab {
 	//actualiza las variables del recurso (pendientes[] y pesoContenedor) para reflejarlo
     public void permisoSoltar(int i){ //Recibe como parametro el id del robot que pide permiso
     	mutex.enter(); //Entramos en la seccion critica
-    		if(pesoContenedor + pendientes[i] > Cinta.MAX_P_CONTENEDOR /*|| avanzando*/){
-				//Comprobamos si el robot puede descargar, mirando si el contenedor tiene
-    			//capacidad para el peso que carga el robot o si el contenedor se esta moviendo
+    		if(pesoContenedor + pendientes[i] > Cinta.MAX_P_CONTENEDOR){
+				//Comprobamos si el robot puede descargar, mirando si el 
+    			//contenedor tiene capacidad para el peso que carga el robot
     			cRobots[i].await(); //Si no puede descargar, se pone al robot en espera
     		}	
     		pesoContenedor = pesoContenedor + pendientes[i]; //Actualizamos el estado del recurso
@@ -72,10 +72,10 @@ public class RoboFabMonitor implements RoboFab {
     			}
     		}
     		if(!permiso){ 
-    			//Si la variable de control señala que hay robots descargando, el proceso se duerme
+    			//Si la variable de control senala que hay robots descargando, el proceso se duerme
     			cContenedor.await();
     		}
-			//Cuando se recibe el signal se procede directamente al cambio de contenedor
+    		//Cuando se recibe el signal se procede al cambio de contenedor
     	mutex.leave(); //Salimos de la seccion critica
     }
     
@@ -84,7 +84,7 @@ public class RoboFabMonitor implements RoboFab {
     public void contenedorNuevo(){
     	mutex.enter(); //Entramos en la seccion critica
     		pesoContenedor = 0; //Actualizamos el estado del recurso
-    		liberar(); //Llamamos al metodo auxiliar para que despierte a uno de los robots
+    		liberar(); //Llamamos al metodo auxiliar para que despierte a uno de los robots    		
     	mutex.leave(); //Salimos de la seccion critica
     }
     
