@@ -2,131 +2,101 @@ import es.upm.babel.cclib.*;
 
 public class RoboFabMonitor implements RoboFab {
 	
-	private Monitor mutex;
-	private Monitor.Cond[] cRobots;
-
-	private Monitor.Cond cContenedor;
-	private boolean avanzando;
-	private boolean lleno;
-	private int[] pendientes;
-	private int pesoContenedor;
+	private Monitor mutex; //Monitor del recurso
+	private Monitor.Cond[] cRobots; //Array de condiciones, una para cada robot
+	private Monitor.Cond cContenedor; //Condicion para el contenedor
+	private boolean lleno;	//Booleano que controla si el contenedor del recurso esta lleno
+	private int[] pendientes;  //Array que guarda los pesos que recogen los robots para
+							   //determinar si se pueden descargar o no en el contenedor
+	private int pesoContenedor;  //Variable para almacenar el peso del contenedor del recurso
 	
 	//Constructor de la clase RoboFabMonitor
-	//Inicializa el monitor con dos condiciones y las variables de control
-	//El array pendientes no se llena explícitamente, porque por la definición de la clase int se llena
-	//por defecto con 0 en todas las posiciones, lo cual es útil para nosotros.
 	public RoboFabMonitor(){
-		mutex = new Monitor();
-		cRobots = new Monitor.Cond[Robots.NUM_ROBOTS];
+		mutex = new Monitor(); //Inicializacion del monitor
+		cRobots = new Monitor.Cond[Robots.NUM_ROBOTS]; //Asignacion de tamaño del array de condiciones
 		for (int i = 0; i < Robots.NUM_ROBOTS; i++){
-			cRobots[i] = mutex.newCond();
+			cRobots[i] = mutex.newCond(); //Inicializacion del array de condiciones para los robots
 		}
-		cContenedor = mutex.newCond();
-		avanzando = false;
+		cContenedor = mutex.newCond(); //Inicialización de la condicion para el contenedor
 		lleno = false;
-
-		pendientes = new int[Robots.NUM_ROBOTS];
-		pesoContenedor = 0;
-		
+		pendientes = new int[Robots.NUM_ROBOTS]; //Inicialización del estado del recurso
+		pesoContenedor = 0;		
 	}
-	//FUNCIONES
-	public void notificarPeso(int i, int p){
-
-    //PRE: p< Peso Maximo Contenedor
-		//POST: Roboot[i] carga p
-		mutex.enter();
-		//Esta funcion notifica al programa principal que el robot i
-		//ha recogido el peso p
-			pendientes[i] = p;
+	
+	//Metodo notificarPeso. Actualiza el vector pendientes[] con el peso recogido por cada robot
+	public void notificarPeso(int i, int p){ //Recibe como parametros el id del robot que informa y el peso que carga
+		mutex.enter(); //Entramos en la seccion critica
+			pendientes[i] = p; //Actualizamos el vector pendientes
 			for(int j = 0; j < Robots.NUM_ROBOTS; j++){
-				//Este bucle controla que los robots que esperan tienen todos más carga de la que puede transportar
-				//el contenedor que está en ese momento en la cinta
+				//Comprobamos si alguno de los robots puede descargar en la cinta
     			if(pesoContenedor + pendientes[j] <= Cinta.MAX_P_CONTENEDOR){
-    				lleno = false;
-    				break;
+    				lleno = false; //Si algun robot puede descargar, el contenedor no esta lleno
+    				j = Robots.NUM_ROBOTS; //Actualizamos la variable del bucle para no seguir iterando
     			}
-    			lleno = true;
+    			lleno = true;//Si ningun robot puede descargar, marcamos el contenedor como lleno
     		}
 			if(lleno){
-				//Si el bucle de control determina que ningún robot puede descargar con seguridad, se le otorga
-				//permiso a la cinta para cambiar el contenedor
+				//Si el contenedor está lleno, se hace un signal a la cinta para que avance
 				cContenedor.signal();
 			}
-		mutex.leave();
-    
+		mutex.leave(); //Salimos de la seccion critica   
 	}
 	
-	
-    public void permisoSoltar(int i){
-      //PRE:PesoContenedor + Robot[i]< Peso Maximo Contenedor
-    	//POST: pesoContenedor+=pendiente[i] ^pendiente[i]=0 
-    	mutex.enter();
-    		while(pesoContenedor + pendientes[i] > Cinta.MAX_P_CONTENEDOR || avanzando){
-				//Este bucle controla si el robot puede descargar de forma segura
-    			cRobots[i].await();
+	//Metodo permisoSoltar. Da paso a los robots para que descarguen en el contenedor y
+	//actualiza las variables del recurso (pendientes[] y pesoContenedor) para reflejarlo
+    public void permisoSoltar(int i){ //Recibe como parametro el id del robot que pide permiso
+    	mutex.enter(); //Entramos en la seccion critica
+    		if(pesoContenedor + pendientes[i] > Cinta.MAX_P_CONTENEDOR /*|| avanzando*/){
+				//Comprobamos si el robot puede descargar, mirando si el contenedor tiene
+    			//capacidad para el peso que carga el robot o si el contenedor se esta moviendo
+    			cRobots[i].await(); //Si no puede descargar, se pone al robot en espera
     		}	
-    		
-			//Aquí se actualiza la variable de control del peso del contenedor y se indica que el robot que ha 
-    		//descargado ya no lleva más carga
-    		pesoContenedor = pesoContenedor + pendientes[i];
-    		pendientes[i] = 0;
-    		    		
-			//Como se controla en bucle si un robot recien despertado puede descargar o no, no es necesario 
-    		//un array de colas en el que se despierte a un robot en concreto. Aunque no es la solución más
-    		//optimizada respecto al tiempo de ejecución, sí lo es en términos de memoria.
-
-    		liberar();
-    			
-    	mutex.leave();
+    		pesoContenedor = pesoContenedor + pendientes[i]; //Actualizamos el estado del recurso
+    		pendientes[i] = 0;   		    		
+    		liberar(); //Se llama al metodo auxiliar liberar, que intentara despertar a uno de los
+    				   //robots dormidos
+    	mutex.leave(); //Salimos de la seccion critica
     }
-    
-    
-    public void solicitarAvance(){
 
-		//PRE: Cierto
-    	//POST: PesoContenedor =0, avanceSol =false
-    	//NO SE CAMBIA []pendientes
-    	mutex.enter();
-    		boolean permiso = true;
-			//Variable de control del permiso de cambio de contenedor
+    //Metodo solicitarAvance. Da permiso a la cinta para cambiar el contenedor cuando este esta lleno.
+    public void solicitarAvance(){
+    	mutex.enter(); //Entramos en la seccion critica
+    		boolean permiso = true; //Variable auxiliar de control
     		for(int i = 0; i < Robots.NUM_ROBOTS; i++){
-				//El bucle comprueba si alguno de los robots puede descargar aún con seguridad
+				//Comprobamos si alguno de los robots puede descargar
     			if(pesoContenedor + pendientes[i] <= Cinta.MAX_P_CONTENEDOR){
-    				permiso = false;
-    				break;
+    				permiso = false; //Si al menos un robot puede descargar, cambiamos a false
+    								 //la variable de control
+    				i = Robots.NUM_ROBOTS; //Actualizamos la variable de control del bucle 
+    									   //para no seguir iterando
     			}
     		}
-    		if(!permiso){
-				//Si alguno de los robots puede descargar, el proceso se duerme
+    		if(!permiso){ 
+    			//Si la variable de control señala que hay robots descargando, el proceso se duerme
     			cContenedor.await();
     		}
-			//Al despertarse, indicará que se procede al cambio de contenedor, lo que evitará que ningún robot 
-    		//descargue encima de la cinta sin haber contenedor.
-    		avanzando = true;
-    	mutex.leave();
+			//Cuando se recibe el signal se procede directamente al cambio de contenedor
+    	mutex.leave(); //Salimos de la seccion critica
     }
     
-    
+    //Metodo contenedorNuevo. Actualiza el estado del recurso para indicar que el peso del 
+    //contenedor vuelve a estar a 0
     public void contenedorNuevo(){
-      	
-    	mutex.enter();
-    		//Esta función resetea la variable de control del peso del contenedor cuando llega uno nuevo
-    			pesoContenedor = 0;
-    			//Además, indica que el contenedor está quieto y se puede descargar con seguridad
-    			avanzando = false;
-    			//Tras hacer esto, se despierta a uno de los robots para que comience la descarga
-    			liberar();
-    	mutex.leave();   	  	
-
+    	mutex.enter(); //Entramos en la seccion critica
+    		pesoContenedor = 0; //Actualizamos el estado del recurso
+    		liberar(); //Llamamos al metodo auxiliar para que despierte a uno de los robots
+    	mutex.leave(); //Salimos de la seccion critica
     }
     
+    //Metodo auxiliar liberar. Comprueba si algun robot esta dormido y puede descargar
+    //Despierta al primer robot que cumpla estas condiciones
     public void liberar(){
-    	for (int i = 0; i < Robots.NUM_ROBOTS; i++){
-    		if (cRobots[i].waiting() > 0 && pendientes[i] + pesoContenedor <= Cinta.MAX_P_CONTENEDOR){
+    	for (int i = 0; i < Robots.NUM_ROBOTS; i++){ 
+    		if (cRobots[i].waiting() > 0 && pendientes[i] + pesoContenedor <= Cinta.MAX_P_CONTENEDOR){ 
+    			//Si se cumple que un robot dormido puede descargar, se hace un signal a su condicion
     			cRobots[i].signal();
-    			i = Robots.NUM_ROBOTS;
+    			i = Robots.NUM_ROBOTS; //Se actualiza la variable de control del bucle para no iterar mas
     		}
     	}
     }
-
 }
